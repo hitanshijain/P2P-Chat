@@ -1,52 +1,65 @@
 import socket
 
-def run_server():
-    # Set up the server socket
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(('localhost', 8000))
-    server_socket.listen()
+# Define the server address and port
+SERVER_ADDRESS = ('localhost', 12000)
 
-    # Create a dictionary to store the client sockets and their associated usernames
-    clients = {}
+# Create a UDP socket and bind it to the server address
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+server_socket.bind(SERVER_ADDRESS)
 
-    # Receive connections and messages from clients
-    while True:
-        # Wait for a client to connect
-        print('Waiting for a client to connect...')
-        client_socket, client_address = server_socket.accept()
-        print(f'Client connected: {client_address}')
+# Store registered users in a dictionary
+registered_users = {}
 
-        # Receive the client's username and store it in the clients dictionary
-        username = client_socket.recv(1024).decode()
-        clients[username] = client_socket
-        print(username)
+# Store messages in a list of tuples: (sender, recipient, message)
+messages = []
 
-        # Receive messages from the client
-        while True:
-            message = client_socket.recv(1024).decode()
-            if message == 'exit':
-                break
-            print(f'Received message from {username}: {message}')
-
-            # Send the message to the intended recipient
-            if ':' in message:
-                recipient_username, message_body = message.split(':', 1)
-                if recipient_username in clients:
-                    recipient_socket = clients[recipient_username]
-                    recipient_socket.send(f'{username}: {message_body}'.encode())
-                else:
-                    print(f'Error: {recipient_username} not found.')
-            else:
-                print(f'Error: Invalid message format.')
-
-        # Remove the client from the clients dictionary
-        del clients[username]
-
-        # Close the client socket
-        client_socket.close()
-
-    # Close the server socket
-    server_socket.close()
-
-if __name__ == '__main__':
-    run_server()
+while True:
+    # Wait for incoming messages
+    message, client_address = server_socket.recvfrom(1024)
+    
+    # Parse the message and determine its type
+    message_parts = message.decode().split('|')
+    message_type = message_parts[0]
+    
+    if message_type == 'login':
+        # Check if the username and password are correct
+        username = message_parts[1]
+        password = message_parts[2]
+        
+        if username in registered_users and registered_users[username] == password:
+            # Send a success message back to the client
+            server_socket.sendto('login|success'.encode(), client_address)
+        else:
+            # Send a failure message back to the client
+            server_socket.sendto('login|failure'.encode(), client_address)
+    
+    elif message_type == 'register':
+        # Add the user to the list of registered users
+        username = message_parts[1]
+        password = message_parts[2]
+        registered_users[username] = client_address
+        
+        # Send a success message back to the client
+        server_socket.sendto('register|success'.encode(), client_address)
+    
+    elif message_type == 'send':
+        # Forward the message to the appropriate peer
+        recipient = message_parts[1]
+        message_text = message_parts[2]
+        sender = message_parts[3]
+        
+        # Find the recipient's address in the registered_users dictionary
+        if recipient in registered_users:
+            recipient_address = registered_users[recipient]
+            messages.append((sender, recipient, message_text))
+            server_socket.sendto(f'send|{sender}|{message_text}'.encode(), recipient_address)
+        else:
+            # Send a failure message back to the client
+            server_socket.sendto(f'send|failure|{recipient}'.encode(), client_address)
+    
+    elif message_type == 'view':
+        # Send a list of messages to the requesting user
+        username = message_parts[1]
+        user_messages = [m for m in messages if m[0] == username or m[1] == username]
+        message_list = '\n'.join([f'{m[0]} -> {m[1]}: {m[2]}' for m in user_messages])
+        server_socket.sendto(f'view|{message_list}'.encode(), client_address)
