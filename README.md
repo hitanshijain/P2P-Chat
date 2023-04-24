@@ -3,6 +3,7 @@ Team Members: Hitanshi Jain, Ajay Krishna Anand
 
 - This is a Peer to Peer chat application that uses the User Datagram Protocol (UDP) for communication. The server and client code are provided in two separate files. Please find the server.py and client.py code files for Peer to Peer Chat implementation using Python. 
 - We have included login, registration, send messages, view messages functionalities in our application. 
+- We have used SQLite database in our application, which has users and messages table in it. 
 
 Explanation:
 
